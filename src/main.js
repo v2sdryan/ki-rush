@@ -9,6 +9,12 @@ const ui = {
   ki: document.querySelector("#ki"),
   status: document.querySelector("#status"),
   details: document.querySelector("#tower-details"),
+  picker: document.querySelector("#hero-picker"),
+  towerMenu: document.querySelector("#tower-menu"),
+  towerMenuTitle: document.querySelector("#tower-menu-title"),
+  upgradeTower: document.querySelector("#upgrade-tower"),
+  showStats: document.querySelector("#show-stats"),
+  closeMenu: document.querySelector("#close-menu"),
   startWave: document.querySelector("#start-wave"),
   pause: document.querySelector("#pause"),
   choices: [...document.querySelectorAll(".tower-choice")]
@@ -16,31 +22,36 @@ const ui = {
 
 const W = canvas.width;
 const H = canvas.height;
+const assetBase = import.meta.env.BASE_URL;
 const assets = await loadAssets({
-  map: "/assets/map.png",
-  hero: "/assets/hero.png",
-  towerHeavy: "/assets/tower-heavy.png",
-  towerMystic: "/assets/tower-mystic.png",
-  towerSpeed: "/assets/tower-speed.png",
-  towerGuardian: "/assets/tower-guardian.png",
-  enemy: "/assets/enemy.png",
-  enemyFast: "/assets/enemy-fast.png",
-  enemyTank: "/assets/enemy-tank.png",
-  boss: "/assets/boss.png"
+  map: `${assetBase}assets/map.png`,
+  hero: `${assetBase}assets/hero.png`,
+  towerHeavy: `${assetBase}assets/tower-heavy.png`,
+  towerMystic: `${assetBase}assets/tower-mystic.png`,
+  towerSpeed: `${assetBase}assets/tower-speed.png`,
+  towerGuardian: `${assetBase}assets/tower-guardian.png`,
+  enemy: `${assetBase}assets/enemy.png`,
+  enemyFast: `${assetBase}assets/enemy-fast.png`,
+  enemyTank: `${assetBase}assets/enemy-tank.png`,
+  boss: `${assetBase}assets/boss.png`
 });
 
 const path = [
-  { x: -60, y: 500 },
-  { x: 135, y: 507 },
-  { x: 260, y: 435 },
-  { x: 360, y: 304 },
-  { x: 500, y: 303 },
-  { x: 620, y: 402 },
-  { x: 766, y: 388 },
-  { x: 900, y: 284 },
-  { x: 1052, y: 304 },
-  { x: 1180, y: 395 },
-  { x: 1340, y: 388 }
+  { x: -70, y: 414 },
+  { x: 118, y: 417 },
+  { x: 230, y: 400 },
+  { x: 313, y: 359 },
+  { x: 362, y: 303 },
+  { x: 462, y: 267 },
+  { x: 572, y: 284 },
+  { x: 641, y: 338 },
+  { x: 728, y: 351 },
+  { x: 812, y: 320 },
+  { x: 890, y: 269 },
+  { x: 1004, y: 279 },
+  { x: 1114, y: 337 },
+  { x: 1214, y: 389 },
+  { x: 1350, y: 389 }
 ];
 
 const buildPads = [
@@ -62,6 +73,8 @@ const towerTypes = {
     cooldown: 0.72,
     damage: 24,
     color: "#6be6ff",
+    attack: "orb",
+    role: "Balanced",
     sprite: "hero",
     size: 92
   },
@@ -73,6 +86,8 @@ const towerTypes = {
     cooldown: 1.05,
     damage: 58,
     color: "#ffd166",
+    attack: "splash",
+    role: "Splash",
     splash: 64,
     sprite: "towerHeavy",
     size: 96
@@ -85,6 +100,8 @@ const towerTypes = {
     cooldown: 1.22,
     damage: 36,
     color: "#c097ff",
+    attack: "beam",
+    role: "Long range",
     pierce: true,
     sprite: "towerMystic",
     size: 88
@@ -97,6 +114,8 @@ const towerTypes = {
     cooldown: 0.38,
     damage: 13,
     color: "#77ff8a",
+    attack: "rapid",
+    role: "Fast",
     sprite: "towerSpeed",
     size: 86
   },
@@ -108,6 +127,8 @@ const towerTypes = {
     cooldown: 0.95,
     damage: 18,
     color: "#86d7ff",
+    attack: "wave",
+    role: "Close slow",
     slow: 0.6,
     sprite: "towerGuardian",
     size: 102
@@ -123,8 +144,11 @@ const enemyTypes = {
 
 let state = resetGame();
 let selectedTower = "pulse";
+let selectedPad = null;
+let selectedBuiltPad = null;
 let last = performance.now();
 
+hideContextPanels();
 ui.startWave.addEventListener("click", startWave);
 ui.pause.addEventListener("click", () => {
   state.paused = !state.paused;
@@ -137,57 +161,39 @@ ui.choices.forEach((button) => {
     selectedTower = button.dataset.tower;
     ui.choices.forEach((choice) => choice.classList.toggle("active", choice === button));
     const tower = towerTypes[selectedTower];
-    setStatus(
-      `${tower.name} selected. Build cost ${tower.cost} coins. Upgrade starts at ${baseUpgradeCost(tower)} coins.`
-    );
-    updateHud();
+    if (selectedPad) {
+      buildTower(selectedPad, selectedTower);
+    } else {
+      setStatus(`${tower.name}: ${tower.role}, ${tower.cost} coins. Tap a glowing pad to place it.`);
+      showDetails(tower);
+    }
   });
 });
+
+ui.upgradeTower.addEventListener("click", () => {
+  if (selectedBuiltPad?.tower) upgradeTower(selectedBuiltPad);
+});
+
+ui.showStats.addEventListener("click", () => {
+  if (selectedBuiltPad?.tower) showDetails(selectedBuiltPad.tower, true);
+});
+
+ui.closeMenu.addEventListener("click", hideContextPanels);
 
 canvas.addEventListener("pointerdown", (event) => {
   const point = canvasPoint(event);
   const pad = buildPads.find((candidate) => dist(candidate, point) < 44);
-  if (!pad) return;
+  if (!pad) {
+    hideContextPanels();
+    return;
+  }
 
   if (pad.tower) {
-    const price = upgradeCost(pad.tower);
-    if (state.ki < price || pad.tower.level >= 3) {
-      setStatus(
-        pad.tower.level >= 3
-          ? "That fighter is already max level."
-          : `Need ${price} coins to upgrade ${pad.tower.name}. You have ${state.ki}.`
-      );
-      return;
-    }
-    state.ki -= price;
-    pad.tower.level += 1;
-    pad.tower.damage *= 1.34;
-    pad.tower.range += 18;
-    pad.tower.cooldown *= 0.92;
-    pad.tower.cost += price;
-    setStatus(`${pad.tower.name} upgraded to level ${pad.tower.level} for ${price} coins.`);
-    updateHud();
+    openTowerMenu(pad, point);
     return;
   }
 
-  const spec = towerTypes[selectedTower];
-  if (state.ki < spec.cost) {
-    setStatus(`Need ${spec.cost} coins for ${spec.name}. You have ${state.ki}.`);
-    return;
-  }
-
-  state.ki -= spec.cost;
-  pad.tower = {
-    ...spec,
-    type: selectedTower,
-    x: pad.x,
-    y: pad.y,
-    level: 1,
-    timer: 0,
-    targetId: null
-  };
-  setStatus(`${spec.name} joined the defense. Click this fighter later to upgrade with coins.`);
-  updateHud();
+  openHeroPicker(pad, point);
 });
 
 requestAnimationFrame(loop);
@@ -209,6 +215,55 @@ function resetGame() {
     victory: false,
     defeat: false
   };
+}
+
+function buildTower(pad, towerKey) {
+  const spec = towerTypes[towerKey];
+  if (!pad || pad.tower) return;
+  if (state.ki < spec.cost) {
+    setStatus(`Need ${spec.cost} coins for ${spec.name}. You have ${state.ki}.`);
+    showDetails(spec);
+    return;
+  }
+
+  state.ki -= spec.cost;
+  pad.tower = {
+    ...spec,
+    type: towerKey,
+    x: pad.x,
+    y: pad.y,
+    level: 1,
+    timer: 0,
+    targetId: null
+  };
+  setStatus(`${spec.name} placed for ${spec.cost} coins. Tap the fighter to upgrade or view stats.`);
+  hideContextPanels();
+  updateHud();
+}
+
+function upgradeTower(pad) {
+  const tower = pad?.tower;
+  if (!tower) return;
+  const price = upgradeCost(tower);
+  if (tower.level >= 3) {
+    setStatus(`${tower.name} is already max level.`);
+    showDetails(tower, true);
+    return;
+  }
+  if (state.ki < price) {
+    setStatus(`Need ${price} coins to upgrade ${tower.name}. You have ${state.ki}.`);
+    showDetails(tower, true);
+    return;
+  }
+  state.ki -= price;
+  tower.level += 1;
+  tower.damage *= 1.34;
+  tower.range += tower.attack === "beam" ? 26 : 18;
+  tower.cooldown *= 0.92;
+  tower.cost += price;
+  setStatus(`${tower.name} upgraded to level ${tower.level} for ${price} coins.`);
+  openTowerMenu(pad, { x: tower.x, y: tower.y });
+  updateHud();
 }
 
 function startWave() {
@@ -320,12 +375,16 @@ function updateTowers(dt) {
     state.shots.push({
       x: tower.x,
       y: tower.y - 36,
+      startX: tower.x,
+      startY: tower.y - 36,
       targetId: target.id,
       damage: tower.damage,
       color: tower.color,
       splash: tower.splash ?? 0,
       slow: tower.slow ?? 0,
       pierce: tower.pierce ?? false,
+      attack: tower.attack,
+      radius: 0,
       hitIds: new Set(),
       life: 0
     });
@@ -340,9 +399,29 @@ function updateShots(dt) {
       shot.done = true;
       continue;
     }
+    if (shot.attack === "beam") {
+      shot.x = target.x;
+      shot.y = target.y;
+      if (shot.life >= 0.08) {
+        hitTarget(shot, target);
+        shot.done = true;
+      }
+      continue;
+    }
+    if (shot.attack === "wave") {
+      shot.radius += 280 * dt;
+      for (const enemy of state.enemies.filter((candidate) => dist(candidate, shot) <= shot.radius)) {
+        if (shot.hitIds.has(enemy.id)) continue;
+        shot.hitIds.add(enemy.id);
+        hitTarget(shot, enemy);
+      }
+      if (shot.radius > 96 || shot.life > 0.45) shot.done = true;
+      continue;
+    }
     const angle = Math.atan2(target.y - shot.y, target.x - shot.x);
-    shot.x += Math.cos(angle) * 650 * dt;
-    shot.y += Math.sin(angle) * 650 * dt;
+    const speed = shot.attack === "rapid" ? 860 : 650;
+    shot.x += Math.cos(angle) * speed * dt;
+    shot.y += Math.sin(angle) * speed * dt;
     if (dist(shot, target) < (target.boss ? 46 : 30) && !shot.hitIds.has(target.id)) {
       shot.hitIds.add(target.id);
       hitTarget(shot, target);
@@ -509,10 +588,46 @@ function drawShots() {
     ctx.save();
     ctx.shadowColor = shot.color;
     ctx.shadowBlur = 18;
-    ctx.fillStyle = shot.color;
-    ctx.beginPath();
-    ctx.arc(shot.x, shot.y, shot.splash ? 8 : 6, 0, Math.PI * 2);
-    ctx.fill();
+    if (shot.attack === "beam") {
+      const target = state.enemies.find((enemy) => enemy.id === shot.targetId);
+      if (target) {
+        ctx.strokeStyle = shot.color;
+        ctx.lineWidth = 6;
+        ctx.globalAlpha = 0.88;
+        ctx.beginPath();
+        ctx.moveTo(shot.startX, shot.startY);
+        ctx.lineTo(target.x, target.y);
+        ctx.stroke();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#fff8ea";
+        ctx.stroke();
+      }
+    } else if (shot.attack === "wave") {
+      ctx.strokeStyle = shot.color;
+      ctx.lineWidth = 5;
+      ctx.globalAlpha = Math.max(0, 1 - shot.life * 2.2);
+      ctx.beginPath();
+      ctx.arc(shot.startX, shot.startY, shot.radius, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (shot.attack === "splash") {
+      ctx.fillStyle = shot.color;
+      ctx.beginPath();
+      ctx.arc(shot.x, shot.y, 10 + Math.sin(shot.life * 24) * 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#fff8ea";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    } else if (shot.attack === "rapid") {
+      ctx.fillStyle = shot.color;
+      ctx.beginPath();
+      ctx.ellipse(shot.x, shot.y, 8, 3, shot.life * 16, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = shot.color;
+      ctx.beginPath();
+      ctx.arc(shot.x, shot.y, 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
   }
 }
@@ -618,24 +733,69 @@ function updateHud() {
     button.textContent = `${tower.shortName} ${tower.cost}c`;
     button.title = `${tower.name}: build ${tower.cost} coins, upgrade ${baseUpgradeCost(tower)} coins, power ${tower.damage}, range ${tower.range}, speed ${attacksPerSecond(tower)}/s`;
   });
-  renderTowerDetails();
+  if (!ui.details.hidden) renderTowerDetails(towerTypes[selectedTower]);
 }
 
 function setStatus(message) {
   ui.status.textContent = message;
 }
 
-function renderTowerDetails() {
-  const tower = towerTypes[selectedTower];
+function openHeroPicker(pad) {
+  selectedPad = pad;
+  selectedBuiltPad = null;
+  ui.towerMenu.hidden = true;
+  ui.details.hidden = true;
+  ui.picker.hidden = false;
+  const cheapest = Math.min(...Object.values(towerTypes).map((tower) => tower.cost));
+  setStatus(
+    state.ki >= cheapest
+      ? "Choose a fighter for this pad."
+      : `You need at least ${cheapest} coins to build. Current coins: ${state.ki}.`
+  );
+  updateHud();
+}
+
+function openTowerMenu(pad) {
+  selectedPad = null;
+  selectedBuiltPad = pad;
+  const tower = pad.tower;
+  const price = tower.level >= 3 ? "Max" : `${upgradeCost(tower)}c`;
+  ui.picker.hidden = true;
+  ui.details.hidden = true;
+  ui.towerMenu.hidden = false;
+  ui.towerMenuTitle.textContent = `${tower.name} L${tower.level}`;
+  ui.upgradeTower.textContent = tower.level >= 3 ? "Max Level" : `Upgrade ${price}`;
+  ui.upgradeTower.disabled = tower.level >= 3 || state.ki < upgradeCost(tower);
+  setStatus(`Tap Upgrade or Stats. Coins: ${state.ki}.`);
+}
+
+function hideContextPanels() {
+  selectedPad = null;
+  selectedBuiltPad = null;
+  ui.picker.hidden = true;
+  ui.towerMenu.hidden = true;
+  ui.details.hidden = true;
+}
+
+function showDetails(tower, built = false) {
+  renderTowerDetails(tower, built);
+  ui.details.hidden = false;
+}
+
+function renderTowerDetails(tower = towerTypes[selectedTower], built = false) {
+  const nextUpgrade = built && tower.level < 3 ? upgradeCost(tower) : baseUpgradeCost(tower);
+  const dps = Math.round(tower.damage * Number(attacksPerSecond(tower)));
   ui.details.innerHTML = `
-    <div class="detail-title">${tower.name}</div>
+    <div class="detail-title">${tower.name}${built ? ` L${tower.level}` : ""} - ${tower.role}</div>
     <div class="detail-grid">
       <div class="detail-stat"><span>Your Coins</span><b>${state.ki}</b></div>
       <div class="detail-stat"><span>Build Cost</span><b>${tower.cost} coins</b></div>
-      <div class="detail-stat"><span>Upgrade Cost</span><b>${baseUpgradeCost(tower)} coins</b></div>
-      <div class="detail-stat"><span>Power</span><b>${tower.damage}</b></div>
-      <div class="detail-stat"><span>Range</span><b>${tower.range}</b></div>
+      <div class="detail-stat"><span>Upgrade Cost</span><b>${tower.level >= 3 ? "Max" : `${nextUpgrade} coins`}</b></div>
+      <div class="detail-stat"><span>Power</span><b>${Math.round(tower.damage)}</b></div>
+      <div class="detail-stat"><span>Range</span><b>${Math.round(tower.range)}</b></div>
       <div class="detail-stat"><span>Attack Speed</span><b>${attacksPerSecond(tower)}/s</b></div>
+      <div class="detail-stat"><span>DPS</span><b>${dps}</b></div>
+      <div class="detail-stat"><span>Attack</span><b>${tower.attack}</b></div>
     </div>
   `;
 }

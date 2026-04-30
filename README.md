@@ -1,4 +1,4 @@
-# Ki Rush
+# Ki Rush v1.2
 
 Ki Rush is a deployable browser tower-defense game inspired by anime energy battles. It uses original generated art assets instead of copyrighted Dragon Ball characters, so the project is safer to publish publicly.
 
@@ -6,6 +6,7 @@ Ki Rush is a deployable browser tower-defense game inspired by anime energy batt
 
 - Build energy towers on glowing pads.
 - Choose from five anime-inspired fighter towers with different cost, damage, range, and attack speed.
+- Mobile tap controls: tap an empty pad to open fighter selection, tap a fighter to upgrade or view stats.
 - Start waves of alien raiders and boss enemies.
 - Earn coins from defeated enemies.
 - Upgrade built fighters by clicking them, then spending coins.
@@ -39,6 +40,16 @@ npm run dev
    - Build Command: `npm run build`
    - Output Directory: `dist`
 4. Deploy.
+
+## GitHub Pages
+
+The repo includes a GitHub Actions workflow that builds `dist` and deploys GitHub Pages on every push to `master`.
+
+Live page:
+
+```text
+https://v2sdryan.github.io/ki-rush/
+```
 
 ## Assets
 

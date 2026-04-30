@@ -25,13 +25,19 @@
             <span id="ki">Coins 280</span>
           </div>
           <div class="hud top-right">
-            <span class="version-badge">v1.1</span>
+            <span class="version-badge">v1.2</span>
             <button id="start-wave" type="button">Start Wave</button>
             <button id="pause" type="button">Pause</button>
           </div>
           <div class="hud bottom-left" id="status">Click a glowing pad to build an energy tower.</div>
-          <div class="hud detail-panel" id="tower-details"></div>
-          <div class="hud bottom-right">
+          <div class="hud detail-panel" id="tower-details" hidden></div>
+          <div class="hud tower-menu" id="tower-menu" hidden>
+            <strong id="tower-menu-title">Fighter</strong>
+            <button id="upgrade-tower" type="button">Upgrade</button>
+            <button id="show-stats" type="button">Stats</button>
+            <button id="close-menu" type="button">Close</button>
+          </div>
+          <div class="hud bottom-right hero-picker" id="hero-picker" aria-label="Choose fighter" hidden>
             <button class="tower-choice active" type="button" data-tower="pulse">Blue 60</button>
             <button class="tower-choice" type="button" data-tower="nova">Gold 95</button>
             <button class="tower-choice" type="button" data-tower="mystic">Mystic 85</button>
