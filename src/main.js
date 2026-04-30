@@ -8,6 +8,7 @@ const ui = {
   lives: document.querySelector("#lives"),
   ki: document.querySelector("#ki"),
   status: document.querySelector("#status"),
+  details: document.querySelector("#tower-details"),
   startWave: document.querySelector("#start-wave"),
   pause: document.querySelector("#pause"),
   choices: [...document.querySelectorAll(".tower-choice")]
@@ -18,7 +19,13 @@ const H = canvas.height;
 const assets = await loadAssets({
   map: "/assets/map.png",
   hero: "/assets/hero.png",
+  towerHeavy: "/assets/tower-heavy.png",
+  towerMystic: "/assets/tower-mystic.png",
+  towerSpeed: "/assets/tower-speed.png",
+  towerGuardian: "/assets/tower-guardian.png",
   enemy: "/assets/enemy.png",
+  enemyFast: "/assets/enemy-fast.png",
+  enemyTank: "/assets/enemy-tank.png",
   boss: "/assets/boss.png"
 });
 
@@ -47,9 +54,71 @@ const buildPads = [
 ].map((pad, id) => ({ ...pad, id, tower: null }));
 
 const towerTypes = {
-  pulse: { name: "Pulse", cost: 60, range: 168, cooldown: 0.72, damage: 24, color: "#6be6ff" },
-  nova: { name: "Nova", cost: 95, range: 128, cooldown: 1.05, damage: 58, color: "#ffd166", splash: 64 },
-  slow: { name: "Frost", cost: 75, range: 150, cooldown: 0.95, damage: 12, color: "#a6fff2", slow: 0.55 }
+  pulse: {
+    name: "Blue Brawler",
+    shortName: "Blue",
+    cost: 60,
+    range: 168,
+    cooldown: 0.72,
+    damage: 24,
+    color: "#6be6ff",
+    sprite: "hero",
+    size: 92
+  },
+  nova: {
+    name: "Gold Striker",
+    shortName: "Gold",
+    cost: 95,
+    range: 128,
+    cooldown: 1.05,
+    damage: 58,
+    color: "#ffd166",
+    splash: 64,
+    sprite: "towerHeavy",
+    size: 96
+  },
+  mystic: {
+    name: "Mystic Beam",
+    shortName: "Mystic",
+    cost: 85,
+    range: 225,
+    cooldown: 1.22,
+    damage: 36,
+    color: "#c097ff",
+    pierce: true,
+    sprite: "towerMystic",
+    size: 88
+  },
+  speed: {
+    name: "Speed Spark",
+    shortName: "Speed",
+    cost: 55,
+    range: 138,
+    cooldown: 0.38,
+    damage: 13,
+    color: "#77ff8a",
+    sprite: "towerSpeed",
+    size: 86
+  },
+  guardian: {
+    name: "Guard Wave",
+    shortName: "Guard",
+    cost: 80,
+    range: 155,
+    cooldown: 0.95,
+    damage: 18,
+    color: "#86d7ff",
+    slow: 0.6,
+    sprite: "towerGuardian",
+    size: 102
+  }
+};
+
+const enemyTypes = {
+  raider: { sprite: "enemy", hp: 90, speed: 96, reward: 22, size: 72, damage: 1 },
+  runner: { sprite: "enemyFast", hp: 58, speed: 152, reward: 18, size: 66, damage: 1 },
+  tank: { sprite: "enemyTank", hp: 210, speed: 58, reward: 42, size: 88, damage: 2 },
+  boss: { sprite: "boss", hp: 470, speed: 54, reward: 105, size: 116, damage: 4, boss: true }
 };
 
 let state = resetGame();
@@ -67,7 +136,11 @@ ui.choices.forEach((button) => {
   button.addEventListener("click", () => {
     selectedTower = button.dataset.tower;
     ui.choices.forEach((choice) => choice.classList.toggle("active", choice === button));
-    setStatus(`${towerTypes[selectedTower].name} tower selected.`);
+    const tower = towerTypes[selectedTower];
+    setStatus(
+      `${tower.name} selected. Build cost ${tower.cost} coins. Upgrade starts at ${baseUpgradeCost(tower)} coins.`
+    );
+    updateHud();
   });
 });
 
@@ -77,24 +150,29 @@ canvas.addEventListener("pointerdown", (event) => {
   if (!pad) return;
 
   if (pad.tower) {
-    const price = Math.round(pad.tower.cost * 0.65);
+    const price = upgradeCost(pad.tower);
     if (state.ki < price || pad.tower.level >= 3) {
-      setStatus(pad.tower.level >= 3 ? "That tower is already max level." : `Need ${price} ki to upgrade.`);
+      setStatus(
+        pad.tower.level >= 3
+          ? "That fighter is already max level."
+          : `Need ${price} coins to upgrade ${pad.tower.name}. You have ${state.ki}.`
+      );
       return;
     }
     state.ki -= price;
     pad.tower.level += 1;
     pad.tower.damage *= 1.34;
     pad.tower.range += 18;
+    pad.tower.cooldown *= 0.92;
     pad.tower.cost += price;
-    setStatus(`${pad.tower.name} tower upgraded to level ${pad.tower.level}.`);
+    setStatus(`${pad.tower.name} upgraded to level ${pad.tower.level} for ${price} coins.`);
     updateHud();
     return;
   }
 
   const spec = towerTypes[selectedTower];
   if (state.ki < spec.cost) {
-    setStatus(`Need ${spec.cost} ki for a ${spec.name} tower.`);
+    setStatus(`Need ${spec.cost} coins for ${spec.name}. You have ${state.ki}.`);
     return;
   }
 
@@ -108,7 +186,7 @@ canvas.addEventListener("pointerdown", (event) => {
     timer: 0,
     targetId: null
   };
-  setStatus(`${spec.name} tower online. Click it later to upgrade.`);
+  setStatus(`${spec.name} joined the defense. Click this fighter later to upgrade with coins.`);
   updateHud();
 });
 
@@ -121,7 +199,7 @@ function resetGame() {
   return {
     wave: 1,
     lives: 20,
-    ki: 140,
+    ki: 280,
     enemies: [],
     shots: [],
     particles: [],
@@ -139,7 +217,7 @@ function startWave() {
   const bossWave = state.wave % 4 === 0;
   state.spawns = Array.from({ length: count }, (_, i) => ({
     delay: i * Math.max(0.35, 0.78 - state.wave * 0.04),
-    boss: bossWave && i === count - 1
+    type: pickEnemyType(i, count, bossWave)
   }));
   state.activeWave = true;
   ui.startWave.disabled = true;
@@ -164,7 +242,7 @@ function update(dt) {
   if (state.activeWave && state.spawns.length === 0 && state.enemies.length === 0) {
     state.activeWave = false;
     ui.startWave.disabled = false;
-    state.ki += 60 + state.wave * 12;
+    state.ki += 70 + state.wave * 14;
     state.wave += 1;
     if (state.wave > 8) {
       state.victory = true;
@@ -182,16 +260,21 @@ function spawnEnemies(dt) {
   });
   while (state.spawns[0]?.delay <= 0) {
     const spawn = state.spawns.shift();
+    const spec = enemyTypes[spawn.type];
     const scale = 1 + state.wave * 0.11;
     state.enemies.push({
       id: crypto.randomUUID(),
-      boss: spawn.boss,
+      type: spawn.type,
+      boss: Boolean(spec.boss),
       progress: 0,
-      hp: (spawn.boss ? 420 : 90) * scale,
-      maxHp: (spawn.boss ? 420 : 90) * scale,
-      speed: (spawn.boss ? 58 : 92 + state.wave * 5),
+      hp: spec.hp * scale,
+      maxHp: spec.hp * scale,
+      speed: spec.speed + (spec.boss ? 0 : state.wave * 4),
       slowTime: 0,
-      reward: spawn.boss ? 95 : 20 + state.wave * 2,
+      reward: spec.reward + state.wave * 2,
+      damage: spec.damage,
+      size: spec.size,
+      sprite: spec.sprite,
       x: path[0].x,
       y: path[0].y
     });
@@ -210,7 +293,7 @@ function updateEnemies(dt) {
 
   const escaped = state.enemies.filter((enemy) => enemy.progress >= totalPathLength());
   if (escaped.length) {
-    state.lives -= escaped.reduce((sum, enemy) => sum + (enemy.boss ? 4 : 1), 0);
+    state.lives -= escaped.reduce((sum, enemy) => sum + enemy.damage, 0);
     state.enemies = state.enemies.filter((enemy) => enemy.progress < totalPathLength());
     setStatus("Enemies broke through. Tighten the defense.");
     if (state.lives <= 0) {
@@ -236,12 +319,14 @@ function updateTowers(dt) {
     tower.timer = tower.cooldown / (1 + (tower.level - 1) * 0.14);
     state.shots.push({
       x: tower.x,
-      y: tower.y - 22,
+      y: tower.y - 36,
       targetId: target.id,
       damage: tower.damage,
       color: tower.color,
       splash: tower.splash ?? 0,
       slow: tower.slow ?? 0,
+      pierce: tower.pierce ?? false,
+      hitIds: new Set(),
       life: 0
     });
   }
@@ -258,9 +343,10 @@ function updateShots(dt) {
     const angle = Math.atan2(target.y - shot.y, target.x - shot.x);
     shot.x += Math.cos(angle) * 650 * dt;
     shot.y += Math.sin(angle) * 650 * dt;
-    if (dist(shot, target) < (target.boss ? 46 : 30)) {
+    if (dist(shot, target) < (target.boss ? 46 : 30) && !shot.hitIds.has(target.id)) {
+      shot.hitIds.add(target.id);
       hitTarget(shot, target);
-      shot.done = true;
+      shot.done = !shot.pierce;
     }
     if (shot.life > 1.5) shot.done = true;
   }
@@ -347,21 +433,44 @@ function drawTowers() {
     const tower = pad.tower;
     ctx.save();
     ctx.translate(tower.x, tower.y);
-    ctx.fillStyle = "rgba(26, 23, 20, 0.86)";
-    ctx.strokeStyle = tower.color;
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = `${tower.color}99`;
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.roundRect(-22, -26, 44, 52, 8);
-    ctx.fill();
+    ctx.arc(0, 0, tower.range, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    const bob = Math.sin(performance.now() / 280 + tower.x) * 3;
+    drawSprite(assets[tower.sprite], tower.x - tower.size / 2, tower.y - tower.size + 22 + bob, tower.size, tower.size);
+
+    ctx.save();
+    ctx.translate(tower.x, tower.y);
     ctx.fillStyle = tower.color;
     ctx.beginPath();
-    ctx.arc(0, -32, 13 + Math.sin(performance.now() / 160) * 2, 0, Math.PI * 2);
+    ctx.arc(0, -tower.size + 26 + bob, 9 + Math.sin(performance.now() / 160) * 2, 0, Math.PI * 2);
     ctx.fill();
+    ctx.fillStyle = "rgba(17, 14, 12, 0.86)";
+    ctx.strokeStyle = tower.color;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(-19, 13, 38, 22, 6);
+    ctx.fill();
+    ctx.stroke();
     ctx.fillStyle = "#fff8ea";
     ctx.font = "700 13px system-ui";
     ctx.textAlign = "center";
-    ctx.fillText(`L${tower.level}`, 0, 18);
+    ctx.fillText(`L${tower.level}`, 0, 29);
+    if (tower.level < 3) {
+      const price = upgradeCost(tower);
+      ctx.fillStyle = "#ffd166";
+      ctx.beginPath();
+      ctx.arc(30, 22, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#39240d";
+      ctx.font = "900 10px system-ui";
+      ctx.fillText(price, 30, 26);
+    }
     ctx.restore();
   }
 }
@@ -379,8 +488,8 @@ function drawHero() {
 
 function drawEnemies() {
   for (const enemy of [...state.enemies].sort((a, b) => a.y - b.y)) {
-    const size = enemy.boss ? 112 : 72;
-    drawSprite(enemy.boss ? assets.boss : assets.enemy, enemy.x - size / 2, enemy.y - size + 24, size, size);
+    const size = enemy.size;
+    drawSprite(assets[enemy.sprite], enemy.x - size / 2, enemy.y - size + 24, size, size);
     drawHealth(enemy, size);
   }
 }
@@ -454,6 +563,17 @@ function burst(x, y, color, count) {
   }
 }
 
+function pickEnemyType(index, count, bossWave) {
+  if (bossWave && index === count - 1) return "boss";
+  if (state.wave >= 3 && index % 5 === 3) return "tank";
+  if (state.wave >= 2 && index % 3 === 1) return "runner";
+  return "raider";
+}
+
+function upgradeCost(tower) {
+  return Math.round(tower.cost * (0.52 + tower.level * 0.18));
+}
+
 function pointOnPath(distance) {
   let remaining = distance;
   for (let i = 0; i < path.length - 1; i += 1) {
@@ -492,11 +612,40 @@ function canvasPoint(event) {
 function updateHud() {
   ui.wave.textContent = `Wave ${state.wave}`;
   ui.lives.textContent = `Lives ${state.lives}`;
-  ui.ki.textContent = `Ki ${state.ki}`;
+  ui.ki.textContent = `Coins ${state.ki}`;
+  ui.choices.forEach((button) => {
+    const tower = towerTypes[button.dataset.tower];
+    button.textContent = `${tower.shortName} ${tower.cost}c`;
+    button.title = `${tower.name}: build ${tower.cost} coins, upgrade ${baseUpgradeCost(tower)} coins, power ${tower.damage}, range ${tower.range}, speed ${attacksPerSecond(tower)}/s`;
+  });
+  renderTowerDetails();
 }
 
 function setStatus(message) {
   ui.status.textContent = message;
+}
+
+function renderTowerDetails() {
+  const tower = towerTypes[selectedTower];
+  ui.details.innerHTML = `
+    <div class="detail-title">${tower.name}</div>
+    <div class="detail-grid">
+      <div class="detail-stat"><span>Your Coins</span><b>${state.ki}</b></div>
+      <div class="detail-stat"><span>Build Cost</span><b>${tower.cost} coins</b></div>
+      <div class="detail-stat"><span>Upgrade Cost</span><b>${baseUpgradeCost(tower)} coins</b></div>
+      <div class="detail-stat"><span>Power</span><b>${tower.damage}</b></div>
+      <div class="detail-stat"><span>Range</span><b>${tower.range}</b></div>
+      <div class="detail-stat"><span>Attack Speed</span><b>${attacksPerSecond(tower)}/s</b></div>
+    </div>
+  `;
+}
+
+function baseUpgradeCost(tower) {
+  return Math.round(tower.cost * 0.7);
+}
+
+function attacksPerSecond(tower) {
+  return (1 / tower.cooldown).toFixed(2);
 }
 
 function loadAssets(sources) {

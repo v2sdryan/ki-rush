@@ -5,10 +5,23 @@ Ki Rush is a deployable browser tower-defense game inspired by anime energy batt
 ## Game
 
 - Build energy towers on glowing pads.
+- Choose from five anime-inspired fighter towers with different cost, damage, range, and attack speed.
 - Start waves of alien raiders and boss enemies.
-- Earn ki from defeated enemies.
-- Upgrade built towers by clicking them.
+- Earn coins from defeated enemies.
+- Upgrade built fighters by clicking them, then spending coins.
 - Survive 8 waves to defend the valley.
+
+## Tower Values
+
+| Fighter | Build Cost | First Upgrade | Power | Range | Attack Speed |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Blue Brawler | 60 coins | 42 coins | 24 | 168 | 1.39/s |
+| Gold Striker | 95 coins | 67 coins | 58 | 128 | 0.95/s |
+| Mystic Beam | 85 coins | 59 coins | 36 | 225 | 0.82/s |
+| Speed Spark | 55 coins | 39 coins | 13 | 138 | 2.63/s |
+| Guard Wave | 80 coins | 56 coins | 18 | 155 | 1.05/s |
+
+Upgrades increase power, range, and attack speed. Current coins, build cost, upgrade cost, power, range, and attack speed are shown in-game when selecting a fighter.
 
 ## Local Development
 
@@ -33,7 +46,13 @@ Generated with the built-in image generation skill:
 
 - `public/assets/map.png`
 - `public/assets/hero.png`
+- `public/assets/tower-heavy.png`
+- `public/assets/tower-mystic.png`
+- `public/assets/tower-speed.png`
+- `public/assets/tower-guardian.png`
 - `public/assets/enemy.png`
+- `public/assets/enemy-fast.png`
+- `public/assets/enemy-tank.png`
 - `public/assets/boss.png`
 
 The character prompts intentionally describe original anime-inspired fighters and enemies, not direct Dragon Ball characters, logos, or symbols.
