@@ -112,6 +112,20 @@ canvas {
   top: 12px;
 }
 
+.version-badge {
+  align-items: center;
+  border: 1px solid rgba(255, 218, 128, 0.52);
+  border-radius: 999px;
+  background: rgba(255, 209, 102, 0.18);
+  color: #ffd166;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  height: 32px;
+  letter-spacing: 0;
+  padding: 0 10px;
+}
+
 .bottom-left {
   bottom: 12px;
   left: 12px;
