@@ -45,6 +45,12 @@ button:focus-visible {
   transform: translateY(-1px);
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
+}
+
 button.active {
   background: rgba(60, 181, 224, 0.32);
   border-color: rgba(123, 228, 255, 0.88);
